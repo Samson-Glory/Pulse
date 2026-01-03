@@ -4,20 +4,7 @@ export default function ChatInput({ onSendMessage }) {
   const [message, setMessage] = useState("");
   const textareaRef = useRef(null);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!message.trim()) return;
-    onSendMessage(message);
-    setMessage("");
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit(e);
-    }
-  };
-
+  // Auto-resize textarea
   useEffect(() => {
     if (!textareaRef.current) return;
     textareaRef.current.style.height = "auto";
@@ -27,38 +14,41 @@ export default function ChatInput({ onSendMessage }) {
     )}px`;
   }, [message]);
 
+  const handleSend = (e) => {
+    e?.preventDefault();
+    if (!message.trim()) return;
+    onSendMessage(message.trim());
+    setMessage("");
+  };
+
   return (
     <div className="sticky bottom-0 bg-gradient-to-t from-gray-950 via-gray-950/95 to-transparent p-4">
       <form
-        onSubmit={handleSubmit}
+        onSubmit={handleSend}
         className="flex items-end gap-3 rounded-2xl bg-gray-900/70 backdrop-blur border border-gray-800 px-3 py-2"
       >
         <textarea
           ref={textareaRef}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={handleKeyDown}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
           rows={1}
           placeholder="Message…"
-          className="
-            flex-1 resize-none bg-transparent px-2 py-2
-            text-sm text-gray-100 placeholder:text-gray-500
-            focus:outline-none leading-relaxed max-h-32
-          "
+          className="flex-1 resize-none bg-transparent px-2 py-2 text-sm text-gray-100 placeholder:text-gray-500 focus:outline-none leading-relaxed max-h-32"
         />
-
         <button
           type="submit"
           disabled={!message.trim()}
-          className={`
-            flex h-9 w-9 items-center justify-center rounded-xl
-            transition-colors duration-200
-            ${
-              message.trim()
-                ? "bg-blue-500 hover:bg-blue-600"
-                : "bg-gray-800 text-gray-500 cursor-not-allowed"
-            }
-          `}
+          className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors duration-200 ${
+            message.trim()
+              ? "bg-blue-500 hover:bg-blue-600"
+              : "bg-gray-800 text-gray-500 cursor-not-allowed"
+          }`}
         >
           <svg
             className="h-4 w-4"

@@ -13,19 +13,29 @@ export default function UserItem({ user, isSelected, onClick }) {
         }
       `}
     >
-      {/* Avatar + Online Status */}
+      {/* Avatar + Online Status + AI Personality Accent */}
       <div className="relative flex-shrink-0">
         <img
           src={user.avatar}
           alt={user.name}
-          className="w-10 h-10 rounded-full"
+          className="w-10 h-10 rounded-full border-2"
+          style={{
+            borderColor: user.isAI ? user.accentColor : undefined,
+          }}
         />
+
+        {/* Online Dot */}
         <span
           className={`
             absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-gray-900
             ${user.online ? "bg-green-500" : "bg-gray-500"}
           `}
         />
+
+        {/* AI Typing Indicator Dot */}
+        {user.isAI && user.typing && (
+          <span className="absolute top-0 right-0 w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
+        )}
       </div>
 
       {/* User Info */}

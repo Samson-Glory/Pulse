@@ -1,104 +1,145 @@
+// src/App.jsx
 import { useState, useEffect, useCallback } from "react";
 import Layout from "./components/Layout/Layout";
 import Sidebar from "./components/Sidebar/UserList";
 import ChatWindow from "./components/Chat/ChatWindow";
 import ChatInput from "./components/Chat/ChatInput";
-import { useMessages } from "./hooks/useMessages";
+
 import { useTypingSimulation } from "./hooks/useTypingSimulation";
 import { getCurrentUser, getMockUsers } from "./utils/mockData";
-import {
-  markUserOnline,
-  markUserOffline,
-  updateUserLastSeen,
-} from "./utils/chatHelpers";
+import { markUserOnline } from "./utils/chatHelpers";
+
+import { generateAIResponsePlan } from "./ai/engine";
+import { generateReplyFromPlan } from "./ai/replyGenerator";
+
+import { supabase } from "./lib/supabase";
 
 function App() {
   const [selectedUser, setSelectedUser] = useState(null);
-  const [users, setUsers] = useState(getMockUsers());
+  const [users] = useState(getMockUsers());
   const currentUser = getCurrentUser();
+  const [messages, setMessages] = useState([]);
+  const { isTyping, startTyping, stopTyping } =
+    useTypingSimulation(selectedUser);
 
-  const { messages, sendMessage, clearMessages, markMessagesAsRead } =
-    useMessages(currentUser.id, selectedUser?.id);
+  // Fetch messages initially and merge without overwriting
+  const fetchMessages = useCallback(async () => {
+    if (!selectedUser) return;
+    const { data, error } = await supabase
+      .from("pulse")
+      .select("*")
+      .or(
+        `and(sender_id.eq.${currentUser.id},receiver_id.eq.${selectedUser.id}),and(sender_id.eq.${selectedUser.id},receiver_id.eq.${currentUser.id})`
+      )
+      .order("timestamp", { ascending: true })
+      .limit(50);
 
-  const { isTyping, startTyping, stopTyping } = useTypingSimulation(
-    selectedUser?.id
-  );
-
-  // Simulate online/offline status changes
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setUsers((prevUsers) =>
-        prevUsers.map((user) => {
-          if (user.id === currentUser.id) return user;
-
-          // 10% chance to toggle status every 30 seconds
-          if (Math.random() < 0.1) {
-            return {
-              ...user,
-              online: !user.online,
-              lastSeen: user.online ? new Date().toISOString() : user.lastSeen,
-            };
-          }
-          return user;
-        })
-      );
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [currentUser.id]);
-
-  // Mark messages as read when selecting a user
-  useEffect(() => {
-    if (selectedUser) {
-      markMessagesAsRead(selectedUser.id);
+    if (!error && data) {
+      setMessages((prev) => {
+        // Merge without duplicates
+        const existingIds = new Set(prev.map((m) => m.id));
+        const newMsgs = data.filter((m) => !existingIds.has(m.id));
+        return [...prev, ...newMsgs];
+      });
     }
-  }, [selectedUser, markMessagesAsRead]);
+  }, [selectedUser, currentUser.id]);
 
+  useEffect(() => {
+    if (!selectedUser) return setMessages([]);
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 3000);
+    return () => clearInterval(interval);
+  }, [selectedUser, fetchMessages]);
+
+  // Handle sending messages
   const handleSendMessage = useCallback(
-    (text) => {
+    async (text) => {
       if (!selectedUser || !text.trim()) return;
 
-      sendMessage(text);
-      stopTyping();
+      // Create human message locally first
+      const humanMsg = {
+        id: `temp_${Date.now()}`,
+        sender_id: currentUser.id,
+        receiver_id: selectedUser.id,
+        text,
+        timestamp: new Date().toISOString(),
+        read: true,
+      };
+      setMessages((prev) => [...prev, humanMsg]);
 
-      // Simulate typing indicator and auto-reply
-      setTimeout(() => {
+      // Save to Supabase
+      const { data: savedMsg, error } = await supabase
+        .from("pulse")
+        .insert([
+          {
+            sender_id: currentUser.id,
+            receiver_id: selectedUser.id,
+            text,
+            timestamp: new Date().toISOString(),
+            read: true,
+          },
+        ])
+        .select()
+        .single();
+
+      if (savedMsg) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === humanMsg.id ? savedMsg : m))
+        );
+      }
+
+      // AI reply
+      if (selectedUser.isAI) {
         startTyping();
-      }, 500);
+        try {
+          const plan = await generateAIResponsePlan(
+            selectedUser.id,
+            currentUser.id,
+            text
+          );
 
-      setTimeout(() => {
-        const replies = [
-          "That's interesting! Tell me more.",
-          "Thanks for sharing!",
-          "I see what you mean.",
-          "Let me think about that...",
-          "Great point!",
-          "What do you think about this?",
-          "I agree with you.",
-          "Let's discuss this further.",
-        ];
-        const randomReply = replies[Math.floor(Math.random() * replies.length)];
-        sendMessage(randomReply, selectedUser.id);
-        stopTyping();
-      }, 2000 + Math.random() * 1000);
+          const aiReply = await generateReplyFromPlan(plan);
+
+          const { data: aiMsg } = await supabase
+            .from("pulse")
+            .insert([
+              {
+                sender_id: selectedUser.id,
+                receiver_id: currentUser.id,
+                text: aiReply,
+                timestamp: new Date().toISOString(),
+                read: false,
+              },
+            ])
+            .select()
+            .single();
+
+          setMessages((prev) => [...prev, aiMsg]);
+        } catch (err) {
+          console.error("AI reply error:", err);
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `ai_err_${Date.now()}`,
+              sender_id: selectedUser.id,
+              receiver_id: currentUser.id,
+              text: "Oops… something went wrong 😕",
+              timestamp: new Date().toISOString(),
+              read: false,
+            },
+          ]);
+        } finally {
+          stopTyping();
+        }
+      }
     },
-    [selectedUser, sendMessage, startTyping, stopTyping]
+    [selectedUser, currentUser.id, startTyping, stopTyping]
   );
 
-  const handleUserSelect = useCallback(
-    (user) => {
-      setSelectedUser(user);
-      markMessagesAsRead(user.id);
-      markUserOnline(user.id);
-    },
-    [markMessagesAsRead]
-  );
-
-  const handleClearChat = useCallback(() => {
-    if (selectedUser && window.confirm("Clear all messages in this chat?")) {
-      clearMessages(selectedUser.id);
-    }
-  }, [selectedUser, clearMessages]);
+  const handleUserSelect = useCallback((user) => {
+    setSelectedUser(user);
+    markUserOnline(user.id);
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-gray-100">
@@ -138,8 +179,6 @@ function App() {
             )}
           </div>
         }
-        onClearChat={handleClearChat}
-        hasSelectedUser={!!selectedUser}
       />
     </div>
   );

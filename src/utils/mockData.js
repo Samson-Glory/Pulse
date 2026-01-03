@@ -1,8 +1,11 @@
+// src/utils/mockData.js
+
 export const getCurrentUser = () => ({
   id: "current_user",
   name: "You",
   avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=you",
   online: true,
+  isAI: false,
 });
 
 export const getMockUsers = () => [
@@ -12,8 +15,9 @@ export const getMockUsers = () => [
     avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=alex",
     online: true,
     lastSeen: null,
-    lastMessage: "See you tomorrow!",
-    unreadCount: 2,
+    isAI: true,
+    personality: "friendly",
+    memory: [],
   },
   {
     id: "user_2",
@@ -21,8 +25,9 @@ export const getMockUsers = () => [
     avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=sam",
     online: false,
     lastSeen: "2024-01-15T14:30:00Z",
-    lastMessage: "Thanks for the help!",
-    unreadCount: 0,
+    isAI: true,
+    personality: "professional",
+    memory: [],
   },
   {
     id: "user_3",
@@ -30,8 +35,9 @@ export const getMockUsers = () => [
     avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=taylor",
     online: true,
     lastSeen: null,
-    lastMessage: "Check out this song!",
-    unreadCount: 5,
+    isAI: true,
+    personality: "creative",
+    memory: [],
   },
   {
     id: "user_4",
@@ -39,8 +45,9 @@ export const getMockUsers = () => [
     avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=jamie",
     online: false,
     lastSeen: "2024-01-14T09:15:00Z",
-    lastMessage: "Meeting at 3 PM",
-    unreadCount: 1,
+    isAI: true,
+    personality: "sarcastic",
+    memory: [],
   },
   {
     id: "user_5",
@@ -48,44 +55,8 @@ export const getMockUsers = () => [
     avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=morgan",
     online: true,
     lastSeen: null,
-    lastMessage: "Narrating in progress...",
-    unreadCount: 0,
-  },
-  {
-    id: "user_6",
-    name: "Riley Smith",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=riley",
-    online: false,
-    lastSeen: "2024-01-13T16:45:00Z",
-    lastMessage: "Lunch tomorrow?",
-    unreadCount: 0,
-  },
-];
-
-// Initial mock messages
-export const getMockMessages = () => [
-  {
-    id: "msg_1",
-    senderId: "user_1",
-    receiverId: "current_user",
-    text: "Hey there! How are you doing?",
-    timestamp: "2024-01-15T10:30:00Z",
-    read: true,
-  },
-  {
-    id: "msg_2",
-    senderId: "current_user",
-    receiverId: "user_1",
-    text: "I'm good! Just working on a new project. How about you?",
-    timestamp: "2024-01-15T10:32:00Z",
-    read: true,
-  },
-  {
-    id: "msg_3",
-    senderId: "user_1",
-    receiverId: "current_user",
-    text: "Same here! Working on some React components.",
-    timestamp: "2024-01-15T10:33:00Z",
-    read: true,
+    isAI: true,
+    personality: "friendly",
+    memory: [],
   },
 ];

@@ -1,80 +1,61 @@
+// src/hooks/useMessages.js
 import { useState, useEffect, useCallback } from "react";
-import {
-  loadMessagesFromStorage,
-  saveMessagesToStorage,
-  generateMessageId,
-} from "../utils/chatHelpers";
+import { supabase } from "../supabaseClient";
 
 export function useMessages(currentUserId, selectedUserId) {
   const [messages, setMessages] = useState([]);
 
+  // Load messages whenever selectedUserId changes
   useEffect(() => {
-    if (selectedUserId) {
-      const loadedMessages = loadMessagesFromStorage(
-        currentUserId,
-        selectedUserId
-      );
-      setMessages(loadedMessages);
-    } else {
-      setMessages([]);
-    }
+    if (!selectedUserId) return setMessages([]);
+
+    const fetchMessages = async () => {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("*")
+        .or(
+          `and(sender_id.eq.${currentUserId},receiver_id.eq.${selectedUserId}),and(sender_id.eq.${selectedUserId},receiver_id.eq.${currentUserId})`
+        )
+        .order("created_at", { ascending: true });
+
+      if (error) console.error(error);
+      else setMessages(data);
+    };
+
+    fetchMessages();
   }, [currentUserId, selectedUserId]);
 
   const sendMessage = useCallback(
-    (text, senderId = currentUserId, receiverId = selectedUserId) => {
+    async (text, senderId = currentUserId, receiverId = selectedUserId) => {
       if (!receiverId) return;
 
-      const newMessage = {
-        id: generateMessageId(),
-        senderId,
-        receiverId,
-        text,
-        timestamp: new Date().toISOString(),
-        read: senderId === currentUserId,
-      };
+      const { data, error } = await supabase.from("messages").insert([
+        {
+          sender_id: senderId,
+          receiver_id: receiverId,
+          text,
+          read: senderId === currentUserId,
+        },
+      ]);
 
-      setMessages((prev) => {
-        const updated = [...prev, newMessage];
-        saveMessagesToStorage(currentUserId, selectedUserId, updated);
-        return updated;
-      });
+      if (error) console.error(error);
+      else setMessages((prev) => [...prev, ...data]);
     },
     [currentUserId, selectedUserId]
   );
 
-  const clearMessages = useCallback(
-    (otherUserId) => {
-      const key = `chat_${currentUserId}_${otherUserId}`;
-      localStorage.removeItem(key);
-      setMessages([]);
-    },
-    [currentUserId]
-  );
+  const clearMessages = useCallback(async () => {
+    if (!selectedUserId) return;
+    const { error } = await supabase
+      .from("messages")
+      .delete()
+      .or(
+        `and(sender_id.eq.${currentUserId},receiver_id.eq.${selectedUserId}),and(sender_id.eq.${selectedUserId},receiver_id.eq.${currentUserId})`
+      );
 
-  const markMessagesAsRead = useCallback(
-    (otherUserId) => {
-      const key = `chat_${currentUserId}_${otherUserId}`;
-      const stored = localStorage.getItem(key);
-      if (stored) {
-        const messages = JSON.parse(stored);
-        const updated = messages.map((msg) =>
-          msg.senderId === otherUserId ? { ...msg, read: true } : msg
-        );
-        localStorage.setItem(key, JSON.stringify(updated));
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.senderId === otherUserId ? { ...msg, read: true } : msg
-          )
-        );
-      }
-    },
-    [currentUserId]
-  );
+    if (error) console.error(error);
+    else setMessages([]);
+  }, [currentUserId, selectedUserId]);
 
-  return {
-    messages,
-    sendMessage,
-    clearMessages,
-    markMessagesAsRead,
-  };
+  return { messages, sendMessage, clearMessages };
 }
